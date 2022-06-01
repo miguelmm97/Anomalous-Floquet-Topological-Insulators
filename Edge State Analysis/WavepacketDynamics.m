@@ -14,7 +14,7 @@ addpath('functions')
 %% Variables
 
 % Code specification
-drive='Kitagawa';                                                           % 'Kitagawa' % Select driving approach
+drive='Rudner';                                                           % 'Kitagawa' % Select driving approach
 geometry= 'Strip';% 'Cyllinder' % 'Circle'                              % Select geometry
 evolution= 'Stroboscopic'; % 'Exact'                                        % Evolution for the Rudner drive
 flattening= 'Off'; % Off                                                    % Apply flattening to the quasienergy spectrum
