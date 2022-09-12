@@ -8,10 +8,10 @@ clear all
 home
 
 %% Parameters
-omega=32/3;
+omega=4;
 T=2*pi/omega;
-delta=0;
-lambda=4;
+delta=2;
+lambda=1.2;
 J=1; J_1=J; J_2=1; J_3=1;
 branchcut=0;
 

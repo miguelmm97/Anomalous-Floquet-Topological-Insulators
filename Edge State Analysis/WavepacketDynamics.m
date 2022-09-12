@@ -14,43 +14,35 @@ addpath('functions')
 %% Variables
 
 % Code specification
-drive='Rudner';                                                           % 'Kitagawa' % Select driving approach
-geometry= 'Strip';% 'Cyllinder' % 'Circle'                              % Select geometry
-evolution= 'Stroboscopic'; % 'Exact'                                        % Evolution for the Rudner drive
+drive='Rudner';                                                           % Select driving approach
+geometry= 'Cyllinder';% 'Cyllinder' % 'Circle'                              % Select geometry
+evolution= 'Exact'; % 'Exact'                                        % Evolution for the Rudner drive
 flattening= 'Off'; % Off                                                    % Apply flattening to the quasienergy spectrum
 impurities= 'Off';                                                          % Put impurities in the sample
 movie= 'Off';                                                               % If we want to produce a movie of the evolution
 
 % Region in the phase diagram
-omega=5;     % 6.5 7 5 (Sweet spot Rudner drive w=4/3)                      % Frequency of the drive ([J])
+omega=4/3;     % 6.5 7 5 (Sweet spot Rudner drive w=4/3)                    % Frequency of the drive ([J])
 delta_plot=0.5;
-delta=2; % 2 3                                                              % Potential offset ([J])
-lambda=3.4;   % 2.5 4.5 3.4                                                 % Degree of anisotropy
+delta=0; % 2 3                                                              % Potential offset ([J])
+lambda=3;   % 2.5 4.5 3.4                                                   % Degree of anisotropy
 J=1;                                                                        % Coupling constant
 J_1=J; J_2=J; J_3=J;                                                        % Hoping amplitudes ([J])
-
-% Geometry
-Nx=32; % Necessarilly mod(Nx,4)=0 for zig-zag edge along y                  % Number of x sites
-Ny=15; % Necessarilly odd for armchair edge along x                         % Number of y sites
-Ns=Nx*Ny/2;   Ns_real=Ns;                                                   % Total number of states
-y_sep=sqrt(3)/2;                                                            % Separation between y layers so that every site is equidistant from the others in units of a=1
-x_sep=3;  layers_x=Nx*3/8;                                                  % x length of each cell
-center=[Nx*3/8, y_sep*(Ny-1)/2];                                            % Center of the circle geometry
-Radius=Nx*3/8;                                                              % Radius of the circle geometry
-
-% Wavepackets
-x0=((Nx/4)*x_sep/2)-0.5; y0=y_sep*(Ny-1);                                % Initial position of the wave-packet's center
-sigma_x=2; sigma_y=1;                                                       % Widths
-edge = 'Upper';
-
-%% Definitions
+bc = 0;                                                                     % branchcut at 0 if bc=1
 
 % Time
-n_t=100;                                                                    % Time discretisation
 T=2*pi/omega;                                                               % Period
-t=[linspace(0,T/3,n_t),linspace(T/3,2*T/3,n_t),linspace(2*T/3,T,n_t)];      % Time grid
-dt=t(2)-t(1);                                                               % Time step
-t_strob=60*T; t_exact=30*T;                                                 % Final time of the packet evolution
+t0 = 0*T/20;                                                               % Initial time
+t_strob=60*T; t_exact=60*T;                                                 % Final time of the packet evolution
+
+% Geometry
+Nx=104; % 32 Necessarilly mod(Nx,4)=0 for zig-zag edge along y              % Number of x sites
+Ny=25; % 15 Necessarilly odd for armchair edge along x                      % Number of y sites
+Ns=Nx*Ny/2;   Ns_real=Ns; %(Ns_real only changes for circular geometry)     % Total number of states
+y_sep=sqrt(3)/2;    x_sep=3;                                                % Separation between y layers 
+layers_x=Nx*3/8;                                                            % x length of each cell
+center=[Nx*3/8, y_sep*(Ny-1)/2];                                            % Center of the circle geometry
+Radius=Nx*3/8;                                                              % Radius of the circle geometry
 
 % Brillouin Zone
 l=sqrt((4*(pi^2)/9)/(3/4));
@@ -63,6 +55,16 @@ K_BZ=[l,0];
 K2_BZ=[f,s];
 nodal_line=1.01;
 
+% Wavepackets
+x01=((Nx/4)*x_sep/2)-1.5; y01=0; %y_sep*(Ny-1) ;    %0                       % Initial position of the wave-packet's center 1
+x02=((Nx/4)*x_sep/2)-1.5; y02=0; %y_sep*(Ny-1) ;     %0                      % Initial position of the wave-packet's center 2
+sigma_x1=1; sigma_y1=0.5;                                                   % Widths 1
+sigma_x2=1; sigma_y2=0.5;                                                   % Widths 2
+symmetry=1;                                                                 % Symmetric/ Antisymmetric wavepacket
+sign=1;                                                                     % Sign of the wavepacket
+mom_kick =[0,0]; %Z; %K_BZ/2;                                               % Momentum kick
+edge = 'Lower';
+
 % Declarations
 position_matx=zeros(Ns,3);                                                   % 1st colum state number, 2nd x position, 3rd y position
 Psi_0=zeros(Ns,1);                                                           % Initial wavepacket
@@ -71,17 +73,15 @@ total_prob_0=zeros(Ns,1);                                                    % T
 total_prob_pi=zeros(Ns,1);                                                   % Total prob pi gap
 step=0;                                                                      % Step counter in the evolution of the Rudner drive
 avoided_list=0;                                                              % Thrown away points in the circle geometry
-HF_pi = zeros(Ns); HF_0=zeros(Ns);                                           % Definition for hamiltonians at both gaps for symmetry connection
-
 
 % Functions
-gauss_weight=@(x, y, sigma_x, sigma_y) ... 
-           exp(-((x-x0)^2)/(4*sigma_x^2))* exp(-((y-y0)^2)/(4*sigma_y^2));  
+gauss_weight=@(x, y, x0, y0, sigma_x, sigma_y) ... 
+           exp(-((x-x0)^2)/(4*sigma_x^2))* exp(-((y-y0)^2)/(4*sigma_y^2));   % Gaussian probability amplitude (not normalised)
 conv_factor=@(value, maximum) value/maximum;                                 % Conversion factor to plot probability densities
 distance=@(vector) sqrt((vector(1)-center(1))^2+(vector(2)-center(2))^2);    % Norm function
 
-
 %% State-position assignment and Hamiltonian Construction
+disp('Calculating geometry...')
 
 % Construction of the position matrix (n_state, xpos, ypos)
 position_matx=position_matrix(Nx, Ny);                                       % State position and labelling
@@ -105,8 +105,8 @@ switch geometry
         end
 end
 
-
 %% Micromotion and stroboscopic Hamiltonians and spectrum
+disp('Calculating Hamiltonians...')
 
 % Hamiltonians for each driving step
 switch drive   
@@ -114,9 +114,9 @@ switch drive
     case 'Kitagawa'          
         switch geometry
             case 'Strip'
-                [HF, H1, H2, H3] = Floquet_kit_strip(delta, lambda, J_1, J_2, J_3, Nx, Ny, position_matx, dt, n_t);
+                [HF, H1, H2, H3] = Floquet_kit_strip(delta, lambda, J_1, J_2, J_3, Nx, Ny, position_matx, T, t0);
             case 'Cyllinder'
-                [HF, H1, H2, H3] = Floquet_kit_cyl(delta, lambda, J_1, J_2, J_3, Nx, Ny, position_matx, dt, n_t);
+                [HF, H1, H2, H3] = Floquet_kit_cyl(delta, lambda, J_1, J_2, J_3, Nx, Ny, position_matx, T, t0);
             case 'Circle'
                  [HF, H1, H2, H3] = Floquet_kit_strip(delta, lambda, J_1, J_2, J_3, Nx, Ny, position_matx, dt, n_t);  
                  count=0;
@@ -144,9 +144,9 @@ switch drive
     case 'Rudner'       
        switch geometry
            case 'Strip'
-               [HF, H1, H2, H3] = Floquet_rud_strip(delta, J_1, J_2, J_3, Nx, Ny, position_matx, dt, n_t);
+               [HF, H1, H2, H3] = Floquet_rud_strip(delta, J_1, J_2, J_3, Nx, Ny, position_matx, T, t0);
            case 'Cyllinder'
-                [HF, H1, H2, H3] = Floquet_rud_cyl(delta, J_1, J_2, J_3, Nx, Ny, position_matx, dt, n_t);
+                [HF, H1, H2, H3] = Floquet_rud_cyl(delta, J_1, J_2, J_3, Nx, Ny, position_matx, T, t0);
            case 'Circle'
                  [HF, H1, H2, H3] = Floquet_rud_strip(delta, lambda, J_1, J_2, J_3, Nx, Ny, position_matx, dt, n_t);
                  count=0;
@@ -169,8 +169,7 @@ switch drive
                  disp('Unknown geometry!')
        end
        
-    % Raise
-    
+    % Raise   
     otherwise
         disp('Unknown drive!')
 end
@@ -188,10 +187,17 @@ switch impurities
 end
 
 % Stroboscopic and micromotion spectrum
+% qen = diag(qen)
+% if max(abs(imag(quasienergy(:)))) > 1e-6, warning("Imaginary qen")
+% [quasienergy, eigenstates] = eig(HF);
+% [quasienergy, ind] = sort(real(qen));
+% vec = vec(:,ind);
+
 [quasienergy, eigenstates]=spectrum(HF);                                      % Spectrum Floquet Hamiltonian
 [energy1, eigenstates1]=spectrum(H1);                                         % Spectrum 1st Hamiltonian
 [energy2, eigenstates2]=spectrum(H2);                                         % Spectrum 2nd Hamiltonian
 [energy3, eigenstates3]=spectrum(H3);                                         % Spectrum 3rd Hamiltonian
+quasienergy(quasienergy<0) = quasienergy(quasienergy<0)+ 2*pi*bc;             % Specified branchcut
 
 % Apply flattening
 switch flattening
@@ -204,31 +210,31 @@ switch flattening
         quasienergy_flat(Ns-9:Ns)=linspace(pi/2,pi,10);
         quasienergy=quasienergy_flat;
 end
-
       
-%% Wave-packet Overlaps
+%% Initial Wave-packet and Overlaps
+disp('Calculating initial wavepacket...')
 
 % Initial wave-packet
-symmetry=1;
-sign=1;
-mom_kick =[0,0];%nodal_line*[cos(pi/2), sin(pi/2)];
 switch geometry
     
     case {'Strip', 'Cyllinder'}        
         for n=1:Ns_real 
             % A sublattice
-            if H(n,n)>0 %&& position_matx(n,3)>y0-sqrt(3)
+             if H(n,n)>0 % && position_matx(n,3)<y01+0.1 ; % y01-sqrt(3)/2+0.1
                 position = [position_matx(n,2); position_matx(n,3)];                                        % Position of each state
-                kick = exp(-1i*mom_kick*position)*exp(1i*mom_kick*[x0; y0]);                                % Momentum kick for the initial wavepcket
-                Psi_0(n)=sign*kick*gauss_weight( position_matx(n,2),position_matx(n,3),sigma_x, sigma_y);   % Gaussian wavepacket in the sublattice
+                kick = exp(-1i*mom_kick*position); %*exp(1i*mom_kick*[x0; y0]);                             % Momentum kick for the initial wavepcket
+                Psi_0(n)=sign*kick*(gauss_weight(position_matx(n,2),position_matx(n,3), x01, y01, sigma_x1, sigma_y1)+... 
+                gauss_weight(position_matx(n,2), position_matx(n,3), x02, y02, sigma_x2, sigma_y2));        % Gaussian wavepacket in the sublattice               
                 sign = symmetry*sign;                                                                       % Symmetric/ Antisymmetric wavepacket       
+          
             % B sublattice
-            else if H(n,n)<0 %&& position_matx(n,3)>y0-sqrt(3)
-                position = [position_matx(n,2); position_matx(n,3)];                                        % Position of each state
-                kick = exp(-1i*mom_kick*position)*exp(1i*mom_kick*[x0; y0]);                                % Momentum kick for the initial wavepcket
-                Psi_0(n)=sign*kick*gauss_weight( position_matx(n,2),position_matx(n,3),sigma_x, sigma_y);   % Gaussian wavepacket in the sublattice
-                sign = symmetry*sign;                                                                       % Symmetric/ Antisymmetric wavepacket 
-                 end
+            else if H(n,n)<0 % && position_matx(n,3)<y01 +0.1; % y01+sqrt(3)/2 -0.1
+                    position = [position_matx(n,2); position_matx(n,3)];                                        % Position of each state
+                    kick = exp(-1i*mom_kick*position); %*exp(1i*mom_kick*[x0; y0]);                             % Momentum kick for the initial wavepcket
+                    Psi_0(n)=sign*kick*(gauss_weight( position_matx(n,2),position_matx(n,3), x01, y01, sigma_x1, sigma_y1)+... 
+                    gauss_weight( position_matx(n,2),position_matx(n,3), x02, y02, sigma_x2, sigma_y2));        % Gaussian wavepacket in the sublattice     
+                    sign = symmetry*sign;                                                                       % Symmetric/ Antisymmetric wavepacket
+                end
             end
         end
         
@@ -240,20 +246,22 @@ switch geometry
 end 
 
 % Overlap and initial distribution
-norm = sqrt(transpose(conj(Psi_0))*Psi_0);                                   % Normalisation
-Psi_0 = Psi_0 / norm;                                                        % Normalisation
-prob_density_0=abs(conj(Psi_0).*Psi_0);                                      % Initial probability density of the packet
-for n=1:Ns_real                                                              % Initial overlap
+% Psi_0 = eigenstates(:,390);                                              % Select a particular eigenstate
+norm_psi0 = sqrt(transpose(conj(Psi_0))*Psi_0);                            % Normalisation
+Psi_0 = Psi_0 / norm_psi0;                                                 % Normalisation
+prob_density_0=abs(conj(Psi_0).*Psi_0);                                    % Initial probability density of the packet
+for n=1:Ns_real                                                            % Initial overlap
     overlap_0(n)=abs(conj(transpose(eigenstates(:,n)))*Psi_0)^2;
 end
 
-
 %% Wave-packet evolution 
-    
+disp('Calculating evolution...')  
+
 switch evolution
-    
-    case 'Exact'   
+    case 'Exact'  
+        step=0;
         time=0:T/3:t_exact;
+        Psi_t=zeros(Ns,length(time));
         for j=1:length(time)
             % Initial step
             if j==1
@@ -262,16 +270,20 @@ switch evolution
             end
             % Stepwise drive
             if step==1
-                Psi_t(:,j)= Wavepacket_evolution( Psi_t(:, j-1), T/3, energy1, eigenstates1); % Evolution at time t, j many column vectors
-                prob_density(:,j)=abs(conj(Psi_t(:,j)).*Psi_t(:,j));% Probability density of the packet
-                
+                coefs1 = eigenstates1'*Psi_t(:, j-1);
+                coefs_t1 = coefs1.*exp(-1i*energy1*T/3);                  % Initial overlap with eigenstates
+                Psi_t(:,j) = eigenstates1*coefs_t1;                               % Wavefunction at t
+                prob_density(:,j)=abs(Psi_t(:,j)).^2;                           % Probability at t
             else if step==2
-                    Psi_t(:,j)= Wavepacket_evolution( Psi_t(:, j-1), T/3, energy2, eigenstates2); % Evolution at time t, j many column vectors
-                    prob_density(:,j)=abs(conj(Psi_t(:,j)).*Psi_t(:,j));% Probability density of the packet
-                    
+                    coefs2 = eigenstates2'*Psi_t(:, j-1);
+                    coefs_t2 = coefs2.*exp(-1i*energy2*T/3);                  % Initial overlap with eigenstates
+                    Psi_t(:,j) = eigenstates2*coefs_t2;                               % Wavefunction at t
+                    prob_density(:,j)=abs(Psi_t(:,j)).^2;     
                 else if step==3
-                        Psi_t(:,j)= Wavepacket_evolution( Psi_t(:, j-1), T/3, energy3, eigenstates3); % Evolution at time t, j many column vectors
-                        prob_density(:,j)=abs(conj(Psi_t(:,j)).*Psi_t(:,j));% Probability density of the packet
+                        coefs3 = eigenstates3'*Psi_t(:, j-1);
+                        coefs_t3 = coefs3.*exp(-1i*energy3*T/3);                  % Initial overlap with eigenstates
+                        Psi_t(:,j) = eigenstates3*coefs_t3;                               % Wavefunction at t
+                        prob_density(:,j)=abs(Psi_t(:,j)).^2;     
                     end
                 end
             end
@@ -285,17 +297,34 @@ switch evolution
         
     case 'Stroboscopic'
         time=0:T:t_strob;
-        for j=1:length(time)
-            
-            Psi_t(:,j)= Wavepacket_evolution( Psi_0, time(j), quasienergy, eigenstates);   % Evolution at time t, j many column vectors
-            prob_density(:,j)=abs(conj(Psi_t(:,j)).*Psi_t(:,j));                           % Probability density of the packet
-            
+        Psi_t=zeros(Ns,length(time));
+        coefs = eigenstates'*Psi_0;
+        for j=1:length(time)   
+            coefs_t = coefs.*exp(-1i*quasienergy*time(j));                  % Initial overlap with eigenstates
+            Psi_t(:,j) = eigenstates*coefs_t;                               % Wavefunction at t
+            prob_density(:,j)=abs(Psi_t(:,j)).^2;                           % Probability at t
         end
         
     otherwise
         disp('Unknown evolution!')
 end
 
+% We take the probability density of sites at the edge
+delta_x = 1/2;                                                                    % Size of the batch for x disctrtisation
+evolution_matx = Edge_evolution(prob_density, position_matx, Ny, delta_x, edge);  % Evolution only at the edge
+
+%% Saving data for the averaged dynamics
+% str1 = 't0'; str2 = num2str(100*round(t0,2)); str3 = '.mat';
+% file = strcat(str1, str2, str3);
+% cd Averaged_dynamics
+% switch edge
+%     case 'Upper'        
+%        cd Upper_edge_data % upper edge
+%     case 'Lower'
+%        cd Lower_edge_data % lower edge
+% end
+% save(file, 'evolution_matx')
+% return
 
 %% Figures
 
@@ -322,24 +351,32 @@ for i=1:Ns
         end
     end
 end                                                                % Label corresponding couplings  (in order to work we need to set J1, J2, J3 different in H)
-
+title('Geometry and site labeling','FontSize',25,'FontWeight','bold','Interpret','latex')
 
 % QUASIENERGY BANDS
 figure(2) 
 hold on
 box on
-plot(1:Ns_real, quasienergy, '.b', 'MarkerSize', 10)                          % Total quasienergy spectrum
+plot(1:Ns_real, quasienergy.*T, '.b', 'MarkerSize', 10)                          % Total quasienergy spectrum
 % plot(1:12, quasienergy(1:12), '.g', 'MarkerSize', 10)                       % Pi-gap edge states  
 % plot(Ns-11:Ns, quasienergy(Ns-11:Ns), '.g', 'MarkerSize', 10)               % 0-gap edge states  
 % plot(Ns/2-12:Ns/2+12, quasienergy(Ns/2-12:Ns/2+12), '.r', 'MarkerSize', 10) % Pi-gap edge states  
 %title('Quasienergy Spectrum')
 xlabel('Eigenstate Number','FontSize',25,'FontWeight','bold','Interpret','latex')
 ylabel('$ET/J$','FontSize',25,'FontWeight','bold','Interpret','latex')
-ylim([-pi, pi])
+title([drive, ' $\omega= $', num2str(omega), ', $\delta= $', num2str(delta), ', $\lambda= $', num2str(lambda),...
+     ', $N_x=$ ', num2str(Nx), ', $N_y=$ ', num2str(Ny),', $t_0=$ ', num2str(t0)],'FontSize',20,'FontWeight','bold','Interpret','latex'); 
+switch bc
+    case 1
+ylim([-2*pi, 2*pi])
+    case 0
+ylim([-pi, pi])   
+end 
+
 xlim([0 Ns_real])
 ax = gca;
 ax.FontSize =25; 
-ax.XTick = [50,100,150,200,250,300];
+% ax.XTick = [50,100,150,200,250,300];
 %ax.XTickLabel = {'-\pi','-2','-1','0','1','2','\pi'};
 ax.YTick = [-pi, -2, -1, 0, 1, 2, pi];
 ax.YTickLabel = {'-\pi','-2','-1','0','1','2','\pi'};
@@ -352,9 +389,9 @@ figure(3)
 % Main figure
 box on
 hold on
-[hAx,hLine1,hLine2] = plotyy(1:Ns_real, quasienergy, 1:Ns_real, conv_factor(pi, max(overlap_0))*overlap_0); 
+[hAx,hLine1,hLine2] = plotyy(1:Ns_real, quasienergy.*T, 1:Ns_real, conv_factor(pi, max(overlap_0))*overlap_0); 
 
-set(gcf,'Position',[500 100 1300 1500])
+set(gcf,'Position',[400 20 1200 850])
 pos = get(gca, 'Position');
 set(gca, 'Position', [pos(1) pos(2)+0.05 pos(3) pos(4)-0.05]);
 
@@ -367,7 +404,12 @@ hLine2.Color = 'r';
 set(hAx(1),'ytick',[-pi, -pi/2, 0, pi/2, pi]);
 set(hAx(1),'YTickLabel',{'-\pi', '-\pi/2', '0', '\pi/2', '\pi'});
 set(hAx(2),'YTickLabel',[]);
-set(hAx(1),'ylim',[-pi pi])
+switch bc
+    case 1
+set(hAx(1),'ylim',[-2*pi 2*pi])
+    case 0
+set(hAx(1),'ylim',[-pi pi])  
+end 
 set(hAx(2),'ylim',[0 pi])
 set(hAx, 'xlim', [0 Ns_real])
 set(hAx(1),'ycolor','k')
@@ -376,7 +418,8 @@ set(hAx(2),'ycolor','k')
 xlabel(hAx(1),'Eigenstate Number','FontSize',25,'FontWeight','bold','Interpret','latex')
 ylabel(hAx(1),'$ET/J$','FontSize',25,'FontWeight','bold','Interpret','latex') % left y-axis
 ylabel(hAx(2),'$\langle \psi_n \vert \psi_0 \rangle ^2 $ (arb. scale)','FontSize',25,'FontWeight','bold','Interpret','latex') % right y-axis
-
+title([drive, ' $\omega= $', num2str(omega), ', $\delta= $', num2str(delta), ', $\lambda= $', num2str(lambda),...
+     ', $N_x=$ ', num2str(Nx), ', $N_y=$ ', num2str(Ny),', $t_0=$ ', num2str(t0)],'FontSize',20,'FontWeight','bold','Interpret','latex'); 
 ax = gca;
 ax.FontSize =25; 
 %ax.XTick = [50,100,150,200,250,300];
@@ -404,9 +447,9 @@ for i=1:Ns_real
     
     % plot(position_matx(i,2), position_matx(i,3), '.', 'Color', color, 'MarkerSize', radius)
 
-    if real(Psi_0(i))>0 && position_matx(i,3)>y0-3*sqrt(3) % Plot probability densities (different color A and B)  (H(i, i)for sublattice plot)
+    if real(Psi_0(i))>0 && position_matx(i,3)>y01-3*sqrt(3) % Plot probability densities (different color A and B)  (H(i, i)for sublattice plot)
         plot(position_matx(i,2), position_matx(i,3), '.m', 'MarkerSize', radius)
-    else if real(Psi_0(i))<0 && position_matx(i,3)>y0-3*sqrt(3)
+    else if real(Psi_0(i))<0 && position_matx(i,3)>y01-3*sqrt(3)
         plot(position_matx(i,2), position_matx(i,3), '.c', 'MarkerSize', radius)
         end 
     end
@@ -426,11 +469,12 @@ for i=1:Ns_real
     end  
     
 end
-plot(x0, y0, '.k', 'MarkerSize', 16)  % Center of the wavepacket
+plot(x01, y01, '.k', 'MarkerSize', 16)  % Center of the wavepacket
+plot(x02, y02, '.k', 'MarkerSize', 16)  % Center of the wavepacket
 xlim([-1 limx + 0.5])
 switch edge
     case 'Upper'        
-       ylim([limy-3 limy+0.5 ]) % upper edge
+       ylim([limy-4 limy+0.5 ]) % upper edge
     case 'Lower'
        ylim([-1 2]) % lower edge
 end
@@ -444,46 +488,27 @@ ylabel('')
 
 
 % EVOLUTION FIGURE
-cont=1;
-for n=1:Ns_real % We take the probability density of sites at the edge,
-    switch edge
-        case 'Upper'
-            if position_matx(n,3)>y_sep*(Ny-2)-0.1
-                evolution_matx(:,cont)=prob_density(n,:);
-                cont=cont+1;
-            end
-        case 'Lower'
-            if position_matx(n,3)<y_sep + 0.1
-                evolution_matx(:,cont)=prob_density(n,:);
-                cont=cont+1;
-            end
-            
-        otherwise
-            disp('Unknown edge!')
-    end
-end
-  
-
-
 figure(4)
 s=surf(evolution_matx);
-set(gcf,'Position',[900 400 600 500])
+set(gcf,'Position',[700 200 1000 700])
 box on
 view(2)
 c=jet;
-colormap(c(10:50,:));
-caxis([0 0.1])
+colormap(c);
+caxis([0 0.06])
 colorbar
-xlabel('Edge Site','FontSize',25,'FontWeight','bold','Interpret','latex')
+xlabel('$x[a]$','FontSize',25,'FontWeight','bold','Interpret','latex')
 ylabel('Time [T]','FontSize',25,'FontWeight','bold','Interpret','latex')
+title([drive, ' $\omega= $', num2str(omega), ', $\delta= $', num2str(delta), ', $\lambda= $', num2str(lambda),...
+     ', $N_x=$ ', num2str(Nx), ', $N_y=$ ', num2str(Ny),', $t_0=$ ', num2str(t0)],'FontSize',20,'FontWeight','bold','Interpret','latex'); 
 h = colorbar;
 set(get(h,'label'),'string','$\vert \Psi \vert^2$ [arbitrary units]','FontSize',20,'FontWeight','bold','Interpret','latex');
-xlim([1 32])
+xlim([1 length(evolution_matx(1, :))])
 ylim([1 length(time)])
 s.EdgeColor = 'flat'
 ax = gca;
 ax.FontSize =25; 
-ax.XTick = [1,10,20,30];
+ax.XTick = [0:10:length(evolution_matx(1, :))];
 
 
 
@@ -507,10 +532,10 @@ for s=1:length(time) % Movie of the evolution
     
     if strcmp( evolution, 'Stroboscopic')==1% Title selection
         heading=['\omega/J=', num2str(omega), '    \Delta/J=', num2str(delta), '    \lambda=', num2str(lambda), ...
-            '    \sigma_x=', num2str(sigma_x), '    \sigma_y=', num2str(sigma_y),'    t=', num2str(s-1),'T'];
+            '    \sigma_x=', num2str(sigma_x1), '    \sigma_y=', num2str(sigma_y1),'    t=', num2str(s-1),'T'];
     else if strcmp( evolution, 'Exact')==1
             heading=['\omega/J=', num2str(omega), '    \Delta/J=', num2str(delta), ...
-                '    \sigma_x=', num2str(sigma_x), '    \sigma_y=', num2str(sigma_y),'    t=', num2str(s-1),'T/3'];
+                '    \sigma_x=', num2str(sigma_x1), '    \sigma_y=', num2str(sigma_y1),'    t=', num2str(s-1),'T/3'];
         end
     end 
     

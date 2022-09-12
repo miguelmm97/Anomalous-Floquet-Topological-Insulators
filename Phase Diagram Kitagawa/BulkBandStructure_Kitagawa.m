@@ -7,7 +7,7 @@ addpath('Functions')
 %% Parameters
 
 % Drive parameters
-omega=5; %(Units of J)
+omega=6; %(Units of J)
 T=2*pi/omega;
 delta=2; %(Units of J)
 lambda=1;
